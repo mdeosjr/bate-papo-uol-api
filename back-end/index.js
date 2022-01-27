@@ -16,13 +16,14 @@ let db;
 mongoClient.connect(() => {
     db = mongoClient.db("salaBatePapo");
 })
+const hour = dayjs().locale('pt-br').format('HH:mm:ss')
 
 server.post('/participants', async (req, res) => {
     const name = req.body.name;
-    const hour = dayjs().locale('pt-br').format('HH:mm:ss')
     const message = {
         from: name, to: 'Todos', text: 'entra na sala...', type: 'status', time: hour
     }
+    const participants = await db.collection("participants").find({}).toArray()
 
     try {
         Joi.attempt(name, Joi.string());
@@ -52,5 +53,25 @@ server.get('/participants', async (req, res) => {
         db.close();
     }
 });
+
+server.post('/messages', async (req, res) => {
+    const user = req.headers.user;
+    const textUser = req.body;
+    const message = {...textUser, from: user, time: hour}
+
+    try {
+        await db.collection("messages").insertOne(message)
+        res.sendStatus(201);
+        db.close();
+    } catch {
+        res.sendStatus(422);
+        db.close();
+    }
+})
+
+server.get('/messages', async (req, res) => {
+    const messages = await db.collection("messages").find({}).toArray();
+    res.send(messages)
+})
 
 server.listen(4000);
