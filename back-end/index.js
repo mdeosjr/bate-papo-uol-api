@@ -19,14 +19,21 @@ mongoClient.connect(() => {
 const hour = dayjs().locale('pt-br').format('HH:mm:ss')
 
 setInterval(async () => {
-    const participants = await db.collection("participants").find({}).toArray();
-    const lastStatusNow = Date.now();
+    try {
+        const participants = await db.collection("participants").find({}).toArray();
+        await db.collection("messages").find({});
+        const lastStatusNow = Date.now();
 
-    participants.filter(participant => participant.lastStatus < lastStatusNow - 10000)
-                .map(participant => {
-                    db.collection("participants").deleteOne({ lastStatus: participant.lastStatus });
-                    db.collection("messages").insertOne({ from: participant.name, to: 'Todos', text: 'sai da sala...', type: 'status', hour })
-                })
+        for (const participant of participants) {
+            if (participant.lastStatus < lastStatusNow - 10000) {
+                await db.collection("participants").deleteMany({ lastStatus: participant.lastStatus });
+                await db.collection("messages").insertMany({ from: participant.name, to: 'Todos', text: 'sai da sala...', type: 'status', time: hour })
+            }
+        }
+    } catch (error) {
+        console.log(error);
+    }
+   
 }, 15000)
 
 server.post('/participants', async (req, res) => {
@@ -73,7 +80,7 @@ server.get('/participants', async (req, res) => {
 });
 
 server.post('/messages', async (req, res) => {
-    const user = req.headers.User;
+    const user = req.headers.user;
     const textUser = req.body;
     const message = {...textUser, from: user, time: hour};
     const participant = await db.collection("participants").findOne({ name: user });
@@ -101,10 +108,41 @@ server.post('/messages', async (req, res) => {
 })
 
 server.get('/messages', async (req, res) => {
-    const messages = await db.collection("messages").find({}).toArray();
-    res.send(messages)
+    try {
+        const limit = parseInt(req.query.limit)
+        const messages = await db.collection("messages").find({}).toArray();
+    
+        if (!limit) {
+            res.send(messages);
+            db.close();
+        }
+
+        const endIndex = messages.length - 1;
+        const startIndex = endIndex - limit;
+        const limitedMessages = [...messages].slice(startIndex, endIndex);
+        res.send(limitedMessages);
+    } catch (error) {
+        res.sendStatus(500)
+    }
 })
 
-server.listen(4000);
+server.post('/status', async (req, res) => {
+    const user = req.headers.user;
+    const participant = await db.collection("participants").findOne({ name: user });
+        
+    if (!participant) {
+        res.sendStatus(404);
+        return;
+    }
+
+    try {
+        await db.collection("participants").updateOne({ name: user }, { $set: { lastStatus: Date.now() }});
+        res.sendStatus(200)
+    } catch {
+        res.sendStatus(500)
+    }
+})
+
+server.listen(5000);
 
 //mongod --dbpath ~/.mongo
