@@ -5,7 +5,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "npx nodemon back-end/index.js"
+    "start": "npx nodemon back-end/index.js",
+    "stop": "fuser -k 5000/tcp"
   },
   "keywords": [],
   "author": "",
