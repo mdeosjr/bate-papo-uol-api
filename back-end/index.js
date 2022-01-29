@@ -162,7 +162,7 @@ server.post('/status', async (req, res) => {
         res.status(200).send(participant);
         mongoClient.close();
     } catch {
-        res.sendStatus(500)
+        res.sendStatus(500);
         mongoClient.close();
     }
 })
@@ -183,6 +183,48 @@ server.delete('/messages/:id', async (req, res) => {
         mongoClient.close();
     } catch {
         res.sendStatus(404);
+        mongoClient.close();
+    }
+})
+
+server.put('/messages/:id', async (req, res) => {
+    const { mongoClient, db } = await mongoConnect();
+    const user = req.headers.user;
+    const textUser = req.body;
+    const { id } = req.params;
+    const message = await db.collection("messages").findOne({ _id: new ObjectId(id) });
+    const participant = await db.collection("participants").findOne({ name: user });
+    const messageOwner = await db.collection("messages").findOne({ from: user });
+    const newMessage = {...textUser, from: user, time: dayjs().format('HH:mm:ss')};
+
+    const messageSchema = Joi.object({
+        to: Joi.string().required(),
+        text: Joi.string().required(),
+        type: Joi.string().required().valid('message', 'private_message')
+    })
+
+    const validation = messageSchema.validate(textUser);
+    if (validation.error || !participant) {
+        res.status(422).send(validation.error);
+        return
+    };
+
+    if (!message) {
+        res.sendStatus(404);
+        return
+    };
+
+    if (!messageOwner) {
+        res.sendStatus(401);
+        return
+    };
+        
+    try {
+        await db.collection("messages").updateOne({ _id: new ObjectId(id) }, { $set: { text: newMessage.text }});
+        res.sendStatus(201);
+        mongoClient.close();
+    } catch {
+        res.sendStatus(422);
         mongoClient.close();
     }
 })
