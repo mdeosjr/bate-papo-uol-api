@@ -1,10 +1,9 @@
 import express, { json } from 'express';
 import cors from 'cors';
-import { MongoClient } from 'mongodb';
+import { MongoClient, ObjectId } from 'mongodb';
 import Joi from 'joi';
 import dayjs from 'dayjs'
 import dotenv from 'dotenv';
-import res from 'express/lib/response';
 dotenv.config();
 
 const server = express();
@@ -52,8 +51,8 @@ setInterval(async () => {
 
 server.post('/participants', async (req, res) => {
     const { mongoClient, db } = await mongoConnect();
-    const participant = await db.collection("participants").findOne({ name: name });
     const name = req.body.name;
+    const participant = await db.collection("participants").findOne({ name: name });
     const message = {
         from: name, 
         to: 'Todos', 
@@ -108,9 +107,7 @@ server.post('/messages', async (req, res) => {
     const messageSchema = Joi.object({
         to: Joi.string().required(),
         text: Joi.string().required(),
-        type: Joi.string().required().valid('message', 'private_message'),
-        from: any().required(),
-        time:any().required()
+        type: Joi.string().required().valid('message', 'private_message')
     })
 
     const validation = messageSchema.validate(textUser);
@@ -141,7 +138,6 @@ server.get('/messages', async (req, res) => {
 
     try {
         const messages = await db.collection("messages").find({}).toArray();
-    
         res.send(messages.slice(-limit));
         mongoClient.close();
 
@@ -171,9 +167,25 @@ server.post('/status', async (req, res) => {
     }
 })
 
-// server.delete('/messages/:id', async (req, res) => {
+server.delete('/messages/:id', async (req, res) => {
+    const { mongoClient, db } = await mongoConnect();
+    const user = req.headers.user;
+    const { id } = req.params;
+    const messageOwner = await db.collection("messages").findOne({ from: user })
 
-// })
+    if (!messageOwner) {
+        res.sendStatus(401);
+        return;
+    }
+
+    try {
+        await db.collection("messages").deleteOne({ _id: new ObjectId(id) });
+        mongoClient.close();
+    } catch {
+        res.sendStatus(404);
+        mongoClient.close();
+    }
+})
 
 server.listen(5000);
 
