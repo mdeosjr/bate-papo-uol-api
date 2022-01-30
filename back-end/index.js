@@ -128,7 +128,8 @@ server.post('/messages', async (req, res) => {
 
 server.get('/messages', async (req, res) => {
     const { mongoClient, db } = await mongoConnect();
-    const limit = parseInt(req.query.limit)
+    const limit = parseInt(req.query.limit);
+    const user = req.headers.user
 
     if (!limit) {
             res.send(messages);
@@ -137,10 +138,14 @@ server.get('/messages', async (req, res) => {
         }
 
     try {
-        const messages = await db.collection("messages").find({}).toArray();
+        const messages = await db.collection("messages")
+                                 .find({$or:[{ type: "status" }, 
+                                             { type: "message" },
+                                             { to: user }, 
+                                             { from: user }]
+                                        }).toArray();
         res.send(messages.slice(-limit));
         mongoClient.close();
-
     } catch {
         res.sendStatus(500)
         mongoClient.close();
@@ -159,7 +164,7 @@ server.post('/status', async (req, res) => {
 
     try {
         await db.collection("participants").updateOne({ name: user }, { $set: { lastStatus: Date.now() }});
-        res.status(200).send(participant);
+        res.sendStatus(200);
         mongoClient.close();
     } catch {
         res.sendStatus(500);
